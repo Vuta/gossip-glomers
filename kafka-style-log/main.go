@@ -4,21 +4,14 @@ import (
 	"encoding/json"
 	"log"
 	"fmt"
-	"sync"
+	"context"
 
 	maelstrom "github.com/jepsen-io/maelstrom/demo/go"
 )
 
-type State struct {
-	partitions map[string][]int
-	offsets map[string]int
-}
-
 func main() {
 	n := maelstrom.NewNode()
-	state := &State{partitions: make(map[string][]int), offsets: make(map[string]int)}
-
-	var mu sync.Mutex
+	kv := maelstrom.NewLinKV(n)
 
 	n.Handle("send", func(msg maelstrom.Message) error {
 		var body map[string]any
@@ -26,12 +19,20 @@ func main() {
 			return err
 		}
 
+		ctx := context.Background()
+
 		partitionId := body["key"].(string) 
 		value := int(body["msg"].(float64))
-		mu.Lock()
-		state.partitions[partitionId] = append(state.partitions[partitionId], value)
-		mu.Unlock()
-		offset := len(state.partitions[partitionId]) - 1
+		offset := 0
+		for {
+			partition := []int{}
+			kv.ReadInto(ctx, partitionId, &partition)
+			err := kv.CompareAndSwap(ctx, partitionId, partition, append(partition, value), true)
+			if err == nil {
+				offset = len(partition)
+				break
+			}
+		}
 
 		return n.Reply(msg, map[string]any{"type": "send_ok", "offset": offset})
 	})
@@ -42,11 +43,14 @@ func main() {
 			return nil
 		}
 
+		ctx := context.Background()
 		result := make(map[string][][]int)
 
 		for key, offset := range body["offsets"].(map[string]any) {
 			offset := int(offset.(float64))
-			partition := state.partitions[key]
+			partition := []int{}
+			kv.ReadInto(ctx, key, &partition)
+
 			if offset >= 0 && offset <= len(partition) {
 				endOffset := len(partition)
 				if endOffset >= offset + 100 {
@@ -70,11 +74,10 @@ func main() {
 			return nil
 		}
 
-		mu.Lock()
+		ctx := context.Background()
 		for key, offset := range body["offsets"].(map[string]any) {
-			state.offsets[msg.Src+key] = int(offset.(float64))
+			kv.Write(ctx, msg.Src+key, int(offset.(float64)))
 		}
-		mu.Unlock()
 
 		return n.Reply(msg, map[string]any{"type": "commit_offsets_ok"})
 	})
@@ -85,10 +88,13 @@ func main() {
 			return nil
 		}
 
+		ctx := context.Background()
 		result := make(map[string]int)
 		for _, key := range body["keys"].([]any) {
 			key := key.(string)
-			result[key] = state.offsets[msg.Src+key]
+			offset := 0
+			kv.ReadInto(ctx, msg.Src+key, &offset)
+			result[key] = offset
 		}
 
 		return n.Reply(msg, map[string]any{"type": "list_committed_offsets_ok", "offsets": result})
