@@ -1,2 +1,4 @@
+bitbucket.org/pcastools/hash v1.0.5 h1:Z26b2PcLdC64C07KbGkxZRYOyvkEmxOc8o+wCQ2Bmo8=
+bitbucket.org/pcastools/hash v1.0.5/go.mod h1:PwZDvsw1oSN5uo9+r3ztepeAPUekYPBaaxh0pmUaXDo=
 github.com/jepsen-io/maelstrom/demo/go v0.0.0-20241204184542-016086a90274 h1:9LCa2oSy5cFlAN3a1ZzLyGt7Jhj24yqKddtaei3skAw=
 github.com/jepsen-io/maelstrom/demo/go v0.0.0-20241204184542-016086a90274/go.mod h1:i6aVIs5AIOOaQF1lAisBm7DDeWM1Iopf+26UxjagsCU=
